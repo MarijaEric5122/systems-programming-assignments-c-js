@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="sr">
+<head>
+  <meta charset="utf-8">
+  <title>Zadatak 3</title>
+</head>
+<body>
+
+  <h3>Zadatak 3 – Histogram osvetljenosti</h3>
+
+  <input type="file" id="imgInput"><br><br>
+  <button id="btnHist" disabled>Generisi histogram</button>
+  <br><br>
+
+  <div style="display:flex; gap:30px; align-items:flex-start;">
+    <div>
+      <h4>Slika (original → grayscale)</h4>
+      <canvas id="canvasImg" style="border:1px solid #ccc;"></canvas>
+    </div>
+    <div>
+      <h4>Histogram</h4>
+      <canvas id="histCanvas" width="500" height="200" style="border:1px solid #ccc;"></canvas>
+    </div>
+  </div>
+
+
+  <script>
+    var Module = {
+      onRuntimeInitialized() {
+        document.getElementById('btnHist').disabled = false;
+      }
+    };
+  </script>
+
+  {{{ SCRIPT }}}
+
+  <script>
+    const imgInput   = document.getElementById('imgInput');
+    const btnHist    = document.getElementById('btnHist');
+
+    const canvasImg  = document.getElementById('canvasImg');
+    const ctxImg     = canvasImg.getContext('2d');
+
+    const histCanvas = document.getElementById('histCanvas');
+    const hctx       = histCanvas.getContext('2d');
+
+    let imgWidth  = 0;
+    let imgHeight = 0;
+    let origData  = null;  
+
+    // 1) Ucitavanje slike
+    imgInput.addEventListener('change', function (e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const img = new Image();
+      img.onload = function () {
+        imgWidth  = img.width;
+        imgHeight = img.height;
+
+        canvasImg.width  = imgWidth;
+        canvasImg.height = imgHeight;
+
+        ctxImg.drawImage(img, 0, 0);
+
+        
+        origData = ctxImg.getImageData(0, 0, imgWidth, imgHeight);
+        
+        hctx.clearRect(0, 0, histCanvas.width, histCanvas.height);
+      };
+      img.src = URL.createObjectURL(file);
+    });
+
+    // 2) Klik na dugme – pozivamo C funkciju i crtamo histogram
+    btnHist.addEventListener('click', function () {
+      if (!origData) {
+        alert("Prvo izaberite sliku.");
+        return;
+      }
+
+      const imgData = new ImageData(
+        new Uint8ClampedArray(origData.data),
+        imgWidth,
+        imgHeight
+      );
+
+      const data = imgData.data;
+      const len = data.length;
+
+  
+      const pxPtr = Module._malloc(len);
+      Module.HEAPU8.set(data, pxPtr);
+
+      
+      const histSize  = 256;
+      const histBytes = histSize * 4;
+      const histPtr   = Module._malloc(histBytes);
+
+      // Poziv C funkcije
+      Module.ccall(
+        'grayscale_and_hist',
+        null,
+        ['number', 'number', 'number'],
+        [pxPtr, len, histPtr]
+      );
+
+     
+      const grayData = Module.HEAPU8.subarray(pxPtr, pxPtr + len);
+      imgData.data.set(grayData);
+      ctxImg.putImageData(imgData, 0, 0);
+
+      
+      const hist = new Uint32Array(histSize);
+      const histBase = histPtr >> 2; 
+      for (let i = 0; i < histSize; i++) {
+        hist[i] = Module.HEAP32[histBase + i];
+      }
+
+      
+      Module._free(pxPtr);
+      Module._free(histPtr);
+
+      // 3) Crtamo histogram kao linijski graf
+      drawHistogramLine(hist);
+    });
+
+    function drawHistogramLine(hist) {
+      const width  = histCanvas.width;
+      const height = histCanvas.height;
+
+      hctx.clearRect(0, 0, width, height);
+
+      const maxVal = Math.max(...hist);
+      const step   = width / (hist.length - 1);
+      const scale  = maxVal > 0 ? (height - 20) / maxVal : 0;
+
+      hctx.strokeStyle = '#aaa';
+      hctx.beginPath();
+      hctx.moveTo(0, height - 10);
+      hctx.lineTo(width, height - 10);
+      hctx.moveTo(10, 0);
+      hctx.lineTo(10, height);
+      hctx.stroke();
+
+      hctx.strokeStyle = '#2ecc71';
+      hctx.lineWidth = 2;
+      hctx.beginPath();
+
+      hist.forEach((val, i) => {
+        const x = i * step;
+        const y = height - 10 - val * scale;
+        if (i === 0) hctx.moveTo(x, y);
+        else         hctx.lineTo(x, y);
+      });
+
+      hctx.stroke();
+    }
+  </script>
+
+</body>
+</html>

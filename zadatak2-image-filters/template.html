@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="sr">
+<head>
+  <meta charset="utf-8">
+  <title>Zadatak 2 </title>
+</head>
+<body>
+
+  <h3>Izaberite sliku i podesite osvetljenje</h3>
+
+  <input type="file" id="imgInput"><br><br>
+
+  <label>
+    Osvetljenje (-50 do 50):
+    <input type="range" id="paramRange" min="-50" max="50" step="1" value="0">
+    <span id="paramLabel">0</span>
+  </label>
+  <button id="btnPrimeni" disabled>Primeni filter</button>
+
+  <div style="display:flex; gap:20px;">
+  <div>
+    <h4>Original</h4>
+    <canvas id="canvasOriginal"></canvas>
+  </div>
+
+  <div>
+    <h4>Filter (promenjeno osvetljenje)</h4>
+    <canvas id="canvasFiltered"></canvas>
+  </div>
+</div>
+
+  <script>
+    var Module = {
+      onRuntimeInitialized: function () {
+        document.getElementById('btnPrimeni').disabled = false;
+      }
+    };
+  </script>
+
+  {{{ SCRIPT }}}
+
+  <script>
+    const imgInput   = document.getElementById('imgInput');
+    const paramRange = document.getElementById('paramRange');
+    const paramLabel = document.getElementById('paramLabel');
+    const btn        = document.getElementById('btnPrimeni');
+
+    const canvasOrg  = document.getElementById('canvasOriginal');
+    const canvasFil  = document.getElementById('canvasFiltered');
+    const ctxOrg     = canvasOrg.getContext('2d');
+    const ctxFil     = canvasFil.getContext('2d');
+
+    let imgWidth = 0, imgHeight = 0;
+
+    paramRange.addEventListener('input', function () {
+      paramLabel.textContent = paramRange.value;
+    });
+
+    imgInput.addEventListener('change', function (e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const img = new Image();
+      img.onload = function () {
+        imgWidth = img.width;
+        imgHeight = img.height;
+
+        canvasOrg.width = imgWidth;
+        canvasOrg.height = imgHeight;
+        canvasFil.width = imgWidth;
+        canvasFil.height = imgHeight;
+
+        ctxOrg.drawImage(img, 0, 0);  
+        ctxFil.drawImage(img, 0, 0);  
+      };
+      img.src = URL.createObjectURL(file);
+    });
+
+    // Primena filtera 
+    btn.addEventListener('click', function () {
+      if (!imgWidth || !imgHeight) {
+        alert("Prvo izaberite sliku.");
+        return;
+      }
+
+      const param = parseInt(paramRange.value, 10) || 0;
+
+      // Uzmi piksele iz originalnog canvasa
+      const imgData = ctxOrg.getImageData(0, 0, imgWidth, imgHeight);
+      const data = imgData.data;
+      const len = data.length;
+
+      const ptr = Module._malloc(len);
+      Module.HEAPU8.set(data, ptr);
+
+      // C funkcija
+      Module.ccall(
+        'change_brightness',
+        null,
+        ['number', 'number', 'number'],
+        [ptr, len, param]
+      );
+
+      // Vrati promenjene piksele
+      const result = Module.HEAPU8.subarray(ptr, ptr + len);
+      imgData.data.set(result);
+      ctxFil.putImageData(imgData, 0, 0);
+
+      Module._free(ptr);
+    });
+  </script>
+
+</body>
+</html>

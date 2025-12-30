@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="sr">
+<head>
+  <title>Zadatak 1</title>
+</head>
+<body>
+
+  <script>
+    // JS funkcija Leibniz 
+    function piLeibnizJS(n){
+      let s = 0, sign = 1;
+      for (let k = 0; k < n; k++){ s += sign/(2*k+1); sign = -sign; }
+      return 4*s;
+    }
+
+    function log(line){ document.getElementById('output').textContent += line + "\n"; }
+    function clearOut(){ document.getElementById('output').textContent = ""; }
+
+    var Module = {
+      onRuntimeInitialized(){
+        const btn = document.getElementById('btnUporedi');
+        btn.disabled = false;
+        btn.addEventListener('click', () => {
+          clearOut();
+          const n = Math.max(1, (document.getElementById('n').value | 0));
+
+
+          // WASM (C)
+          const t0w = performance.now();
+          const valW = Module.ccall('pi_leibniz','number',['number'],[n]);
+          const t1w = performance.now();
+
+          // JS
+          const t0j = performance.now();
+          const valJ = piLeibnizJS(n);
+          const t1j = performance.now();
+
+          log(`WASM (C): Pi = ${valW}   vreme: ${(t1w - t0w).toFixed(2)} ms`);
+          log(`JS:        Pi = ${valJ}   vreme: ${(t1j - t0j).toFixed(2)} ms`);
+          const diff = Math.abs((t1w - t0w) - (t1j - t0j)).toFixed(2);
+          log(`Razlika: ${diff} ms    brzi: ${
+            (t1w - t0w) < (t1j - t0j) ? "WASM" : ((t1w - t0w) > (t1j - t0j) ? "JS" : "isti")
+          }`);
+        });
+      }
+    };
+  </script>
+
+  {{{ SCRIPT }}}
+
+
+  <h3>Izracunavanje broja Pi (Leibniz metoda)</h3>
+  Iteracije: <input id="n" type="number" value="2000000" min="1">
+  <button id="btnUporedi" disabled>Uporedi</button>
+
+  <pre id="output"></pre>
+
+</body>
+</html>
